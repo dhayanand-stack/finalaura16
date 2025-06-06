@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { collection, addDoc, onSnapshot, query, orderBy } from 'firebase/firestore';
@@ -6,7 +5,7 @@ import { db } from '../config/firebase';
 import { generateAuraDates } from '../utils/auraCalculation';
 import DatePicker from './DatePicker';
 import TaskItem from './TaskItem';
-import { ArrowLeft, Plus, Folder, CheckSquare } from 'lucide-react';
+import { ArrowLeft, Plus, Folder, CheckSquare, Calendar } from 'lucide-react';
 import { Button } from './ui/button';
 import { Card, CardContent } from './ui/card';
 import { Badge } from './ui/badge';
@@ -17,6 +16,7 @@ const FolderPage = () => {
   const [tasks, setTasks] = useState([]);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [lastEndDate, setLastEndDate] = useState(null);
+  const [todaysTasks, setTodaysTasks] = useState([]);
 
   const collectionName = `folder-${folderId}`;
 
@@ -32,6 +32,16 @@ const FolderPage = () => {
       if (tasksData.length > 0) {
         setLastEndDate(new Date(tasksData[tasksData.length - 1].endDate));
       }
+
+      // Update today's tasks
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const todaysTasks = tasksData.filter(task => {
+        const taskDate = new Date(task.currentDate);
+        taskDate.setHours(0, 0, 0, 0);
+        return taskDate.getTime() === today.getTime();
+      });
+      setTodaysTasks(todaysTasks);
     });
 
     return () => unsubscribe();
@@ -117,7 +127,7 @@ const FolderPage = () => {
         </div>
 
         {/* Stats */}
-        <div className="mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
           <Card className="bg-slate-800/50 border-slate-700 backdrop-blur-sm">
             <CardContent className="p-6">
               <div className="flex items-center space-x-3">
@@ -134,19 +144,90 @@ const FolderPage = () => {
               </div>
             </CardContent>
           </Card>
+
+          <Card className="bg-slate-800/50 border-slate-700 backdrop-blur-sm">
+            <CardContent className="p-6">
+              <div className="flex items-center space-x-3">
+                <div className="p-3 bg-amber-500/20 rounded-lg">
+                  <Calendar className="w-6 h-6 text-amber-400" />
+                </div>
+                <div>
+                  <p className="text-slate-400 text-sm">Today's Tasks</p>
+                  <p className="text-2xl font-bold text-white">{todaysTasks.length}</p>
+                </div>
+                <Badge variant="secondary" className="bg-amber-500/20 text-amber-300 border-amber-500/30 ml-auto">
+                  Due Today
+                </Badge>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-slate-800/50 border-slate-700 backdrop-blur-sm">
+            <CardContent className="p-6">
+              <div className="flex items-center space-x-3">
+                <div className="p-3 bg-green-500/20 rounded-lg">
+                  <CheckSquare className="w-6 h-6 text-green-400" />
+                </div>
+                <div>
+                  <p className="text-slate-400 text-sm">Completion Rate</p>
+                  <p className="text-2xl font-bold text-white">
+                    {tasks.length > 0 ? Math.round(((tasks.length - todaysTasks.length) / tasks.length) * 100) : 0}%
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
         </div>
 
-        {/* Tasks Grid */}
+        {/* Today's Tasks Section */}
+        {todaysTasks.length > 0 && (
+          <div className="mb-8">
+            <div className="flex items-center space-x-3 mb-6">
+              <h2 className="text-2xl font-semibold text-white">Today's Tasks</h2>
+              <Badge variant="secondary" className="bg-amber-500/20 text-amber-300 border-amber-500/30">
+                {todaysTasks.length} due today
+              </Badge>
+            </div>
+            
+            <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
+              {todaysTasks.map((task) => (
+                <div key={task.id} className="relative">
+                  <div className="absolute -top-2 -right-2 z-10">
+                    <Badge className="bg-amber-500 text-amber-900 border-amber-600 shadow-lg">
+                      Due Today
+                    </Badge>
+                  </div>
+                  <TaskItem 
+                    task={task} 
+                    collectionName={collectionName}
+                    onUpdate={handleUpdate}
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* All Tasks Grid */}
         {tasks.length > 0 ? (
-          <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
-            {tasks.map((task) => (
-              <TaskItem 
-                key={task.id} 
-                task={task} 
-                collectionName={collectionName}
-                onUpdate={handleUpdate}
-              />
-            ))}
+          <div className="space-y-6">
+            <div className="flex items-center space-x-3">
+              <h2 className="text-2xl font-semibold text-white">All Tasks</h2>
+              <Badge variant="secondary" className="bg-purple-500/20 text-purple-300 border-purple-500/30">
+                {tasks.length} total
+              </Badge>
+            </div>
+            
+            <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
+              {tasks.map((task) => (
+                <TaskItem 
+                  key={task.id} 
+                  task={task} 
+                  collectionName={collectionName}
+                  onUpdate={handleUpdate}
+                />
+              ))}
+            </div>
           </div>
         ) : (
           <Card className="bg-slate-800/50 border-slate-700 backdrop-blur-sm">
@@ -156,14 +237,13 @@ const FolderPage = () => {
               </div>
               <h3 className="text-xl font-semibold text-white mb-2">No Tasks Yet</h3>
               <p className="text-slate-400 mb-6">Create your first task in this folder to get started</p>
-          <Button 
-            onClick={handleAddTask} 
-            className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white"
-          >
-          <Plus className="w-4 h-4 mr-2" />
-          Add First Task
-            </Button>
-
+              <Button 
+                onClick={handleAddTask} 
+                className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white"
+              >
+                <Plus className="w-4 h-4 mr-2" />
+                Add First Task
+              </Button>
             </CardContent>
           </Card>
         )}
