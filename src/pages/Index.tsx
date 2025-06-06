@@ -5,7 +5,7 @@ import { db } from '../config/firebase';
 import { generateAuraDates } from '../utils/auraCalculation';
 import DatePicker from '../components/DatePicker';
 import TaskItem from '../components/TaskItem';
-import { Plus, FolderPlus, Layout, Folder, CheckSquare, ArrowDown, Trash2, Calendar } from 'lucide-react';
+import { Plus, FolderPlus, Layout, Folder, CheckSquare, ArrowDown, Trash2, Calendar, Clock } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
@@ -21,6 +21,7 @@ const Index = () => {
   const [editingFolder, setEditingFolder] = useState(null);
   const [lastEndDate, setLastEndDate] = useState(null);
   const [todaysTasks, setTodaysTasks] = useState([]);
+  const [foldersWithTodaysTasks, setFoldersWithTodaysTasks] = useState([]);
 
   useEffect(() => {
     const tasksQuery = query(collection(db, 'tasks'), orderBy('serialNumber'));
@@ -60,6 +61,51 @@ const Index = () => {
       unsubscribeFolders();
     };
   }, []);
+
+  // Check for today's tasks in all folders
+  useEffect(() => {
+    const checkFoldersForTodaysTasks = async () => {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      
+      const foldersWithTasks = [];
+      
+      for (const folder of folders) {
+        const folderCollectionName = `folder-${folder.id}`;
+        try {
+          const folderTasksQuery = query(collection(db, folderCollectionName), orderBy('serialNumber'));
+          const querySnapshot = await getDocs(folderTasksQuery);
+          
+          const folderTasks = [];
+          querySnapshot.forEach((doc) => {
+            folderTasks.push({ id: doc.id, ...doc.data() });
+          });
+          
+          const todaysTasksInFolder = folderTasks.filter(task => {
+            const taskDate = new Date(task.currentDate);
+            taskDate.setHours(0, 0, 0, 0);
+            return taskDate.getTime() === today.getTime();
+          });
+          
+          if (todaysTasksInFolder.length > 0) {
+            foldersWithTasks.push({
+              ...folder,
+              todaysTaskCount: todaysTasksInFolder.length,
+              todaysTaskNumbers: todaysTasksInFolder.map(task => task.serialNumber)
+            });
+          }
+        } catch (error) {
+          console.error(`Error checking tasks for folder ${folder.name}:`, error);
+        }
+      }
+      
+      setFoldersWithTodaysTasks(foldersWithTasks);
+    };
+
+    if (folders.length > 0) {
+      checkFoldersForTodaysTasks();
+    }
+  }, [folders]);
 
   const updateTaskSerialNumbers = async () => {
     try {
@@ -219,6 +265,45 @@ const Index = () => {
           </div>
         </div>
 
+        {/* Folders with Today's Tasks Alert */}
+        {foldersWithTodaysTasks.length > 0 && (
+          <div className="mb-8">
+            <Card className="bg-gradient-to-r from-amber-500/10 to-orange-500/10 border-amber-500/30 backdrop-blur-sm">
+              <CardContent className="p-6">
+                <div className="flex items-start space-x-4">
+                  <div className="p-3 bg-amber-500/20 rounded-lg">
+                    <Clock className="w-6 h-6 text-amber-400" />
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="text-lg font-semibold text-amber-300 mb-2">
+                      Folders with Tasks Due Today
+                    </h3>
+                    <p className="text-amber-200/80 text-sm mb-4">
+                      The following folders have tasks scheduled for today. Click on any folder to review them.
+                    </p>
+                    <div className="flex flex-wrap gap-3">
+                      {foldersWithTodaysTasks.map((folder) => (
+                        <Button
+                          key={folder.id}
+                          onClick={() => navigate(`/folder/${folder.id}`)}
+                          variant="outline"
+                          className="border-amber-500/50 bg-amber-500/10 text-amber-300 hover:bg-amber-500/20 hover:border-amber-500/70 transition-all duration-200"
+                        >
+                          <Folder className="w-4 h-4 mr-2" />
+                          {folder.name}
+                          <Badge className="ml-2 bg-amber-500 text-amber-900 border-amber-600">
+                            {folder.todaysTaskCount} task{folder.todaysTaskCount > 1 ? 's' : ''}
+                          </Badge>
+                        </Button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
+
         {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
           <Card className="bg-slate-800/50 border-slate-700 backdrop-blur-sm">
@@ -324,48 +409,73 @@ const Index = () => {
               </div>
               
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                {folders.map((folder) => (
-                  <Card 
-                    key={folder.id}
-                    className="bg-slate-800/50 border-slate-700 hover:bg-slate-800/70 transition-all duration-300 cursor-pointer group hover:shadow-xl hover:shadow-purple-500/10 backdrop-blur-sm"
-                    onClick={() => navigate(`/folder/${folder.id}`)}
-                  >
-                    <CardContent className="p-6 relative">
-                      <div className="flex items-center space-x-3">
-                        <div className="p-3 bg-purple-500/20 rounded-lg group-hover:bg-purple-500/30 transition-colors">
-                          <Folder className="w-6 h-6 text-purple-400" />
+                {folders.map((folder) => {
+                  const folderWithTodaysTasks = foldersWithTodaysTasks.find(f => f.id === folder.id);
+                  
+                  return (
+                    <Card 
+                      key={folder.id}
+                      className={`bg-slate-800/50 border-slate-700 hover:bg-slate-800/70 transition-all duration-300 cursor-pointer group hover:shadow-xl backdrop-blur-sm relative ${
+                        folderWithTodaysTasks ? 'hover:shadow-amber-500/10 ring-1 ring-amber-500/20' : 'hover:shadow-purple-500/10'
+                      }`}
+                      onClick={() => navigate(`/folder/${folder.id}`)}
+                    >
+                      {folderWithTodaysTasks && (
+                        <div className="absolute -top-2 -right-2 z-10">
+                          <Badge className="bg-amber-500 text-amber-900 border-amber-600 shadow-lg">
+                            {folderWithTodaysTasks.todaysTaskCount} due today
+                          </Badge>
                         </div>
-                        <div className="flex-1">
-                          <h3 className="font-semibold text-white group-hover:text-purple-300 transition-colors">
-                            {folder.name}
-                          </h3>
-                          <p className="text-slate-400 text-sm">Click to open</p>
-                        </div>
-                      </div>
+                      )}
                       
-                      <div className="absolute top-2 right-2 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <Button
-                          onClick={(e) => handleEditFolder(folder, e)}
-                          variant="ghost"
-                          size="sm"
-                          className="text-slate-400 hover:text-white"
-                        >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                          </svg>
-                        </Button>
-                        <Button
-                          onClick={(e) => handleDeleteFolder(folder.id, e)}
-                          variant="ghost"
-                          size="sm"
-                          className="text-red-400 hover:text-red-300 hover:bg-red-500/10"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
+                      <CardContent className="p-6 relative">
+                        <div className="flex items-center space-x-3">
+                          <div className={`p-3 rounded-lg group-hover:bg-purple-500/30 transition-colors ${
+                            folderWithTodaysTasks ? 'bg-amber-500/20' : 'bg-purple-500/20'
+                          }`}>
+                            <Folder className={`w-6 h-6 ${
+                              folderWithTodaysTasks ? 'text-amber-400' : 'text-purple-400'
+                            }`} />
+                          </div>
+                          <div className="flex-1">
+                            <h3 className={`font-semibold group-hover:text-purple-300 transition-colors ${
+                              folderWithTodaysTasks ? 'text-amber-300' : 'text-white'
+                            }`}>
+                              {folder.name}
+                            </h3>
+                            <p className="text-slate-400 text-sm">
+                              {folderWithTodaysTasks ? 
+                                `Tasks #${folderWithTodaysTasks.todaysTaskNumbers.join(', #')} due today` : 
+                                'Click to open'
+                              }
+                            </p>
+                          </div>
+                        </div>
+                        
+                        <div className="absolute top-2 right-2 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <Button
+                            onClick={(e) => handleEditFolder(folder, e)}
+                            variant="ghost"
+                            size="sm"
+                            className="text-slate-400 hover:text-white"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                            </svg>
+                          </Button>
+                          <Button
+                            onClick={(e) => handleDeleteFolder(folder.id, e)}
+                            variant="ghost"
+                            size="sm"
+                            className="text-red-400 hover:text-red-300 hover:bg-red-500/10"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  );
+                })}
               </div>
             </div>
           )}
