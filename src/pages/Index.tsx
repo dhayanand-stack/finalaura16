@@ -5,7 +5,7 @@ import { db } from '../config/firebase';
 import { generateAuraDates } from '../utils/auraCalculation';
 import DatePicker from '../components/DatePicker';
 import TaskItem from '../components/TaskItem';
-import { Plus, FolderPlus, Layout, Folder, CheckSquare, ArrowDown, Trash2, Calendar, Clock } from 'lucide-react';
+import { Plus, FolderPlus, Layout, Folder, CheckSquare, ArrowDown, Trash2, Calendar, Clock, Search, X } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
@@ -22,6 +22,8 @@ const Index = () => {
   const [lastEndDate, setLastEndDate] = useState(null);
   const [todaysTasks, setTodaysTasks] = useState([]);
   const [foldersWithTodaysTasks, setFoldersWithTodaysTasks] = useState([]);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filteredTasks, setFilteredTasks] = useState([]);
 
   useEffect(() => {
     const tasksQuery = query(collection(db, 'tasks'), orderBy('serialNumber'));
@@ -61,6 +63,34 @@ const Index = () => {
       unsubscribeFolders();
     };
   }, []);
+
+  // Filter tasks based on search query
+  useEffect(() => {
+    if (!searchQuery.trim()) {
+      setFilteredTasks(tasks);
+    } else {
+      const query = searchQuery.toLowerCase().trim();
+      const filtered = tasks.filter(task => {
+        // Search by task number (e.g., "#1", "1", "#4", "4")
+        const taskNumber = task.serialNumber.toString();
+        const hashTaskNumber = `#${taskNumber}`;
+        
+        // Check if query matches task number with or without #
+        if (query === taskNumber || query === hashTaskNumber || 
+            query.startsWith('#') && query.slice(1) === taskNumber) {
+          return true;
+        }
+        
+        // Also search in task text content
+        if (task.text1 && task.text1.toLowerCase().includes(query)) {
+          return true;
+        }
+        
+        return false;
+      });
+      setFilteredTasks(filtered);
+    }
+  }, [searchQuery, tasks]);
 
   // Check for today's tasks in all folders
   useEffect(() => {
@@ -228,6 +258,10 @@ const Index = () => {
     setShowFolderInput(true);
   };
 
+  const clearSearch = () => {
+    setSearchQuery('');
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-gray-900 to-slate-800">
       <div className="container mx-auto px-4 py-8 max-w-7xl">
@@ -264,6 +298,46 @@ const Index = () => {
             </div>
           </div>
         </div>
+
+        {/* Search Section */}
+        {tasks.length > 0 && (
+          <div className="mb-8">
+            <Card className="bg-slate-800/50 border-slate-700 backdrop-blur-sm">
+              <CardContent className="p-6">
+                <div className="flex items-center space-x-4">
+                  <div className="p-3 bg-blue-500/20 rounded-lg">
+                    <Search className="w-6 h-6 text-blue-400" />
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="text-lg font-semibold text-white mb-2">Search Tasks</h3>
+                    <div className="relative">
+                      <input
+                        type="text"
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        placeholder="Search by task number (e.g., #1, #4) or content..."
+                        className="w-full px-4 py-3 pr-12 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors"
+                      />
+                      {searchQuery && (
+                        <button
+                          onClick={clearSearch}
+                          className="absolute right-3 top-1/2 transform -translate-y-1/2 text-slate-400 hover:text-white transition-colors"
+                        >
+                          <X className="w-5 h-5" />
+                        </button>
+                      )}
+                    </div>
+                    {searchQuery && (
+                      <p className="text-slate-400 text-sm mt-2">
+                        Found {filteredTasks.length} task{filteredTasks.length !== 1 ? 's' : ''} matching "{searchQuery}"
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
 
         {/* Folders with Today's Tasks Alert */}
         {foldersWithTodaysTasks.length > 0 && (
@@ -376,15 +450,17 @@ const Index = () => {
             <div className="space-y-6">
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-3">
-                  <h2 className="text-2xl font-semibold text-white">Active Tasks</h2>
+                  <h2 className="text-2xl font-semibold text-white">
+                    {searchQuery ? 'Search Results' : 'Active Tasks'}
+                  </h2>
                   <Badge variant="secondary" className="bg-blue-500/20 text-blue-300 border-blue-500/30">
-                    {tasks.length} items
+                    {searchQuery ? filteredTasks.length : tasks.length} items
                   </Badge>
                 </div>
               </div>
               
               <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
-                {tasks.map((task) => (
+                {(searchQuery ? filteredTasks : tasks).map((task) => (
                   <TaskItem 
                     key={task.id} 
                     task={task} 
@@ -393,6 +469,23 @@ const Index = () => {
                   />
                 ))}
               </div>
+
+              {searchQuery && filteredTasks.length === 0 && (
+                <Card className="bg-slate-800/50 border-slate-700 backdrop-blur-sm">
+                  <CardContent className="p-8 text-center">
+                    <div className="w-16 h-16 bg-slate-700 rounded-full flex items-center justify-center mx-auto mb-4">
+                      <Search className="w-8 h-8 text-slate-400" />
+                    </div>
+                    <h3 className="text-xl font-semibold text-white mb-2">No Tasks Found</h3>
+                    <p className="text-slate-400 mb-4">
+                      No tasks match your search for "{searchQuery}". Try searching by task number (e.g., #1, #4) or content.
+                    </p>
+                    <Button onClick={clearSearch} variant="outline" className="border-slate-600 text-slate-300 hover:bg-slate-700">
+                      Clear Search
+                    </Button>
+                  </CardContent>
+                </Card>
+              )}
             </div>
           )}
 

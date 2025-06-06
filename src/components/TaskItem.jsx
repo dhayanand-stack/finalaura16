@@ -23,6 +23,9 @@ const TaskItem = ({ task, collectionName, onUpdate }) => {
   const [showText2, setShowText2] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
 
+  // Check if this is a folder task (not main page task)
+  const isFolderTask = collectionName.includes('folder');
+
   const truncateText = (text, maxLength = 30) => {
     if (!text) return '';
     return text.length > maxLength ? text.substring(0, maxLength) + '...' : text;
@@ -263,7 +266,7 @@ const TaskItem = ({ task, collectionName, onUpdate }) => {
           )}
 
           {/* Secondary Text (for folder items) */}
-          {collectionName.includes('folder') && (
+          {isFolderTask && (
             <>
               {showText2Input ? (
                 <div className="space-y-3">
@@ -317,35 +320,37 @@ const TaskItem = ({ task, collectionName, onUpdate }) => {
             </>
           )}
 
-          {/* Images Section */}
-          <div className="space-y-3">
-            <div className="flex items-center space-x-2">
-              <Image className="w-4 h-4 text-slate-400" />
-              <span className="text-slate-400 text-sm font-medium">Attachments</span>
+          {/* Images Section - Only show for main page tasks (not folder tasks) */}
+          {!isFolderTask && (
+            <div className="space-y-3">
+              <div className="flex items-center space-x-2">
+                <Image className="w-4 h-4 text-slate-400" />
+                <span className="text-slate-400 text-sm font-medium">Attachments</span>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <ImageUpload
+                  label={
+                    <div className="flex items-center justify-center space-x-2 text-slate-400">
+                      <Image className="w-5 h-5" />
+                      <span>Image 1</span>
+                    </div>
+                  }
+                  image={task.image1}
+                  onImageChange={(imageData) => handleImageUpdate('image1', imageData)}
+                />
+                <ImageUpload
+                  label={
+                    <div className="flex items-center justify-center space-x-2 text-slate-400">
+                      <Image className="w-5 h-5" />
+                      <span>Image 2</span>
+                    </div>
+                  }
+                  image={task.image2}
+                  onImageChange={(imageData) => handleImageUpdate('image2', imageData)}
+                />
+              </div>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <ImageUpload
-                label={
-                  <div className="flex items-center justify-center space-x-2 text-slate-400">
-                    <Image className="w-5 h-5" />
-                    <span>Image 1</span>
-                  </div>
-                }
-                image={task.image1}
-                onImageChange={(imageData) => handleImageUpdate('image1', imageData)}
-              />
-              <ImageUpload
-                label={
-                  <div className="flex items-center justify-center space-x-2 text-slate-400">
-                    <Image className="w-5 h-5" />
-                    <span>Image 2</span>
-                  </div>
-                }
-                image={task.image2}
-                onImageChange={(imageData) => handleImageUpdate('image2', imageData)}
-              />
-            </div>
-          </div>
+          )}
         </div>
 
         {/* Modals */}
